@@ -13,6 +13,16 @@ const premadePages = [
     name: "Wave Wrecker",
     src: "/coloring-pages/wave-wrecker.jpg",
   },
+    {
+    id: "megaladon",
+    name: "Megaladon",
+    src: "/coloring-pages/megaladon.png",
+  },
+    {
+    id: "rageasaur",
+    name: "Rageasaur",
+    src: "/coloring-pages/rageasaur.png",
+  },
   {
     id: "dino-steg",
     name: "Motosaurus",
