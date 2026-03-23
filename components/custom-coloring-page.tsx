@@ -26,26 +26,22 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    
+
+    setImageLoaded(false)
+
     const img = new Image()
-    // Only set crossOrigin for external URLs (data: or https:)
-    if (imageUrl.startsWith('data:') || imageUrl.startsWith('https:')) {
-      img.crossOrigin = "anonymous"
-    }
-    
+    img.crossOrigin = "anonymous"
+
     img.onload = () => {
       imageRef.current = img
 
-      // Calculate display size based on container
       const maxWidth = Math.min(window.innerWidth - 48, 600)
       const aspectRatio = img.height / img.width
       const displayWidth = maxWidth
       const displayHeight = maxWidth * aspectRatio
 
-      // Store dimensions for coordinate calculations
       canvasSizeRef.current = { width: displayWidth, height: displayHeight }
 
-      // Scale canvas buffer for high-DPI screens
       const dpr = window.devicePixelRatio || 1
       canvas.width = displayWidth * dpr
       canvas.height = displayHeight * dpr
@@ -62,31 +58,17 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
 
       setImageLoaded(true)
     }
-    
+
     img.onerror = () => {
-      // Retry without crossOrigin for local images
-      const retryImg = new Image()
-      retryImg.onload = () => {
-        imageRef.current = retryImg
-        const maxWidth = Math.min(window.innerWidth - 48, 600)
-        const aspectRatio = retryImg.height / retryImg.width
-        const dpr = window.devicePixelRatio || 1
-        canvasSizeRef.current = { width: maxWidth, height: maxWidth * aspectRatio }
-        canvas.width = maxWidth * dpr
-        canvas.height = maxWidth * aspectRatio * dpr
-        canvas.style.width = `${maxWidth}px`
-        canvas.style.height = `${maxWidth * aspectRatio}px`
-        const ctx = canvas.getContext('2d')
-        if (ctx) {
-          ctx.scale(dpr, dpr)
-          ctx.drawImage(retryImg, 0, 0, maxWidth, maxWidth * aspectRatio)
-        }
-        setImageLoaded(true)
-      }
-      retryImg.src = imageUrl
+      console.error("Image failed to load:", imageUrl)
     }
-    
-    img.src = imageUrl
+
+    // For relative paths, make them absolute so crossOrigin works correctly
+    if (imageUrl.startsWith('/')) {
+      img.src = `${window.location.origin}${imageUrl}`
+    } else {
+      img.src = imageUrl
+    }
   }, [imageUrl])
 
   const getCanvasCoordinates = useCallback((e: React.TouchEvent | React.MouseEvent) => {
@@ -223,11 +205,9 @@ img { max-width: 100%; max-height: 100vh; object-fit: contain; }
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        
         <h1 className="text-lg md:text-xl font-bold text-foreground text-center flex-1 px-2 truncate">
           {pageName}
         </h1>
-        
         <button
           onClick={handleReset}
           className={cn(
@@ -320,14 +300,13 @@ img { max-width: 100%; max-height: 100vh; object-fit: contain; }
           {/* Currently selected color indicator */}
           <div className="flex items-center justify-center gap-3">
             <span className="text-sm font-medium text-muted-foreground">Draw with:</span>
-            <div 
+            <div
               className="w-8 h-8 rounded-full border-4 border-foreground shadow-md"
               style={{ backgroundColor: selectedColor }}
               aria-label="Currently selected color"
             />
           </div>
-          
-          <ColorPalette 
+          <ColorPalette
             selectedColor={selectedColor}
             onColorSelect={setSelectedColor}
           />
