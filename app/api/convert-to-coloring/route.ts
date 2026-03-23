@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { GoogleGenAI, Modality } from "@google/genai"
 export async function POST(req: NextRequest) {
   try {
     const { imageData } = await req.json()
@@ -13,48 +14,40 @@ export async function POST(req: NextRequest) {
     const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "")
     const mimeTypeMatch = imageData.match(/^data:(image\/\w+);base64,/)
     const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : "image/jpeg"
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                text: "Convert this photo of a toy monster truck into a clean black and white coloring book page for young children ages 2 to 5. Use bold simple outlines. Remove all color and background clutter. The result should look like a page from a kids coloring book — just clean black lines on a white background, ready to print and color in."
-              },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64Data
-                }
+    const ai = new GoogleGenAI({ apiKey })
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-image",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: "Convert this photo of a toy monster truck into a clean black and white coloring book page for young children ages 2 to 5. Use bold simple outlines. Remove all color and background clutter. The result should look like a page from a kids coloring book — just clean black lines on a white background, ready to print and color in."
+            },
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data
               }
-            ]
-          }],
-          generationConfig: {
-            responseModalities: ["IMAGE", "TEXT"]
-          }
-        })
+            }
+          ]
+        }
+      ],
+      config: {
+        responseModalities: [Modality.IMAGE, Modality.TEXT]
       }
-    )
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("Gemini API error:", errorText)
-      return NextResponse.json({ error: "Gemini API error" }, { status: 500 })
-    }
-    const result = await response.json()
+    })
     // Extract the image from the response
-    const parts = result.candidates?.[0]?.content?.parts ?? []
+    const parts = response.candidates?.[0]?.content?.parts ?? []
     for (const part of parts) {
-      if (part.inline_data) {
-        const { mime_type, data } = part.inline_data
+      if (part.inlineData) {
+        const { mimeType: outMime, data } = part.inlineData
         return NextResponse.json({
-          imageUrl: `data:${mime_type};base64,${data}`
+          imageUrl: `data:${outMime};base64,${data}`
         })
       }
     }
-    console.error("No image in Gemini response:", JSON.stringify(result))
+    console.error("No image in Gemini response:", JSON.stringify(response))
     return NextResponse.json({ error: "No image returned from Gemini" }, { status: 500 })
   } catch (error) {
     console.error("Unexpected error in convert-to-coloring:", error)
