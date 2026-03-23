@@ -47,15 +47,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Image too large" }, { status: 400 });
     }
 
-    const prompt = `Transform this monster truck toy photo into a high-quality children's coloring book page.
-
-Requirements:
-- Black outlines only on a pure white background — no gray fills, no color, no shading
-- Preserve the unique details of THIS specific truck: body shape, wheel guards, tire tread, bumpers, cab design, any logos or decorations
-- Bold, clean lines suitable for a child to color with crayons (minimum 3px stroke weight)
-- Keep the perspective and composition of the original photo
-- The result should look like a professional coloring book illustration
-- Do not add backgrounds, grass, dirt, or other scenery — just the truck on white`;
+    const prompt = `const prompt = `Can you turn this picture of a toy monster truck into a black and white image that would be a classic coloring book page for my son?`;`;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`,
