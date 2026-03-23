@@ -3,6 +3,13 @@ import { generateText } from 'ai'
 
 export async function POST(request: NextRequest) {
   try {
+    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      return NextResponse.json(
+        { error: 'Server is not configured. Missing GOOGLE_GENERATIVE_AI_API_KEY.' },
+        { status: 503 },
+      )
+    }
+
     const { imageData } = await request.json()
 
     if (!imageData) {
