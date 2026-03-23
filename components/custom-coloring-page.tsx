@@ -262,24 +262,23 @@ img { max-width: 100%; max-height: 100vh; object-fit: contain; }
 
         {/* Canvas container */}
         <div className="w-full max-w-2xl bg-card rounded-3xl shadow-2xl border-4 border-accent/20 overflow-hidden p-2">
-          {!imageLoaded ? (
+          {!imageLoaded && (
             <div className="aspect-[3/4] flex items-center justify-center">
               <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : (
-            <canvas
-              ref={canvasRef}
-              onTouchStart={handleStart}
-              onTouchMove={handleMove}
-              onTouchEnd={handleEnd}
-              onMouseDown={handleStart}
-              onMouseMove={handleMove}
-              onMouseUp={handleEnd}
-              onMouseLeave={handleEnd}
-              className="w-full h-auto rounded-2xl touch-none"
-              style={{ touchAction: 'none' }}
-            />
           )}
+          <canvas
+            ref={canvasRef}
+            onTouchStart={handleStart}
+            onTouchMove={handleMove}
+            onTouchEnd={handleEnd}
+            onMouseDown={handleStart}
+            onMouseMove={handleMove}
+            onMouseUp={handleEnd}
+            onMouseLeave={handleEnd}
+            className={cn("w-full h-auto rounded-2xl touch-none", !imageLoaded && "hidden")}
+            style={{ touchAction: 'none' }}
+          />
         </div>
       </main>
 
