@@ -41,3 +41,58 @@ export async function POST(request: NextRequest) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [
+            {
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: mimeType,
+                    data: base64Image,
+                  },
+                },
+                { text: prompt },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseModalities: ["IMAGE", "TEXT"],
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Gemini API error:", response.status, errorText);
+      return NextResponse.json(
+        { error: "Image generation failed", details: errorText },
+        { status: 502 }
+      );
+    }
+
+    const data = await response.json();
+
+    const parts = data?.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = parts.find(
+      (p: { inlineData?: { mimeType: string; data: string } }) => p.inlineData
+    );
+
+    if (!imagePart?.inlineData?.data) {
+      console.error("No image in Gemini response:", JSON.stringify(data));
+      return NextResponse.json(
+        { error: "No image returned from Gemini" },
+        { status: 502 }
+      );
+    }
+
+    const outputMime = imagePart.inlineData.mimeType || "image/png";
+    const imageUrl = `data:${outputMime};base64,${imagePart.inlineData.data}`;
+
+    return NextResponse.json({ imageUrl });
+  } catch (err) {
+    console.error("Unexpected error in generate-coloring-page:", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
