@@ -19,10 +19,19 @@ export function CameraCapture({ onImageCaptured, onClose }: CameraCaptureProps) 
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Limit file size to 10MB to avoid API and memory issues
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Photo is too big! Please use a smaller image (under 10MB).')
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = (event) => {
       setCapturedImage(event.target?.result as string)
       setError(null)
+    }
+    reader.onerror = () => {
+      setError('Could not read that photo. Please try another one!')
     }
     reader.readAsDataURL(file)
   }, [])

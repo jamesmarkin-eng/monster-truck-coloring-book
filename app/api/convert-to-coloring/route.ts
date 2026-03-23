@@ -3,6 +3,13 @@ import { generateText } from 'ai'
 
 export async function POST(request: NextRequest) {
   try {
+    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      return NextResponse.json(
+        { error: 'Server is not configured. Missing GOOGLE_GENERATIVE_AI_API_KEY.' },
+        { status: 503 },
+      )
+    }
+
     const { imageData } = await request.json()
 
     if (!imageData) {
@@ -15,9 +22,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid image data format' }, { status: 400 })
     }
     
-    const mimeType = `image/${base64Match[1]}` as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+    const mediaType = `image/${base64Match[1]}`
     const base64Data = base64Match[2]
-    
+
     // Use Google's Gemini model which can generate images
     const result = await generateText({
       model: 'google/gemini-3.1-flash-image-preview',
@@ -28,7 +35,7 @@ export async function POST(request: NextRequest) {
             {
               type: 'image',
               image: base64Data,
-              mimeType,
+              mediaType,
             },
             {
               type: 'text',

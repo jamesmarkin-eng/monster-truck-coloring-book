@@ -35,27 +35,31 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
     
     img.onload = () => {
       imageRef.current = img
-      
+
       // Calculate display size based on container
       const maxWidth = Math.min(window.innerWidth - 48, 600)
       const aspectRatio = img.height / img.width
       const displayWidth = maxWidth
       const displayHeight = maxWidth * aspectRatio
-      
+
       // Store dimensions for coordinate calculations
       canvasSizeRef.current = { width: displayWidth, height: displayHeight }
-      
-      // Set canvas to match display size
-      canvas.width = displayWidth
-      canvas.height = displayHeight
-      
+
+      // Scale canvas buffer for high-DPI screens
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = displayWidth * dpr
+      canvas.height = displayHeight * dpr
+      canvas.style.width = `${displayWidth}px`
+      canvas.style.height = `${displayHeight}px`
+
       const ctx = canvas.getContext('2d')
       if (!ctx) return
-      
+
+      ctx.scale(dpr, dpr)
       ctx.imageSmoothingEnabled = true
       ctx.imageSmoothingQuality = 'high'
       ctx.drawImage(img, 0, 0, displayWidth, displayHeight)
-      
+
       setImageLoaded(true)
     }
     
@@ -66,12 +70,16 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
         imageRef.current = retryImg
         const maxWidth = Math.min(window.innerWidth - 48, 600)
         const aspectRatio = retryImg.height / retryImg.width
-        canvas.width = maxWidth
-        canvas.height = maxWidth * aspectRatio
+        const dpr = window.devicePixelRatio || 1
         canvasSizeRef.current = { width: maxWidth, height: maxWidth * aspectRatio }
+        canvas.width = maxWidth * dpr
+        canvas.height = maxWidth * aspectRatio * dpr
+        canvas.style.width = `${maxWidth}px`
+        canvas.style.height = `${maxWidth * aspectRatio}px`
         const ctx = canvas.getContext('2d')
         if (ctx) {
-          ctx.drawImage(retryImg, 0, 0, canvas.width, canvas.height)
+          ctx.scale(dpr, dpr)
+          ctx.drawImage(retryImg, 0, 0, maxWidth, maxWidth * aspectRatio)
         }
         setImageLoaded(true)
       }
@@ -86,9 +94,10 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
     if (!canvas) return null
 
     const rect = canvas.getBoundingClientRect()
-    // Simple scaling: canvas internal size vs displayed size
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
+    // Scale from CSS pixels to our logical canvas coordinates
+    const { width, height } = canvasSizeRef.current
+    const scaleX = width / rect.width
+    const scaleY = height / rect.height
 
     if ('touches' in e) {
       const touch = e.touches[0]
@@ -146,9 +155,10 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
     const ctx = canvas?.getContext('2d')
     const img = imageRef.current
     if (!ctx || !img || !canvas) return
-    
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+    const { width, height } = canvasSizeRef.current
+    ctx.clearRect(0, 0, width, height)
+    ctx.drawImage(img, 0, 0, width, height)
   }, [])
 
   const handleSave = useCallback(() => {
@@ -175,33 +185,23 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
     if (!printWindow) return
 
     const imageData = canvas.toDataURL('image/png')
-    
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${pageName} - Coloring Page</title>
-          <style>
-            @page { margin: 0.5in; }
-            body { 
-              margin: 0; 
-              display: flex; 
-              justify-content: center; 
-              align-items: center;
-              min-height: 100vh;
-            }
-            img { 
-              max-width: 100%; 
-              max-height: 100vh;
-              object-fit: contain;
-            }
-          </style>
-        </head>
-        <body>
-          <img src="${imageData}" alt="${pageName}" onload="window.print();window.close();" />
-        </body>
-      </html>
-    `)
+    // Sanitize pageName to prevent XSS via document.write
+    const safeName = pageName.replace(/[<>"'&]/g, '')
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<title>${safeName} - Coloring Page</title>
+<style>
+@page { margin: 0.5in; }
+body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+</style>
+</head>
+<body>
+<img src="${imageData}" alt="Coloring Page" onload="window.print();window.close();" />
+</body>
+</html>`)
     printWindow.document.close()
   }, [pageName])
 
