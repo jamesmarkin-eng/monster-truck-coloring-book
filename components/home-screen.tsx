@@ -15,8 +15,23 @@ const premadePages = [
   },
   {
     id: "dino-steg",
-    name: "Dino-Steg",
+    name: "Motosaurus",
     src: "/coloring-pages/dino-steg.jpg",
+  },
+  {
+    id: "skelesaurus",
+    name: "Skelesaurus",
+    src: "/coloring-pages/skelesaurus.png",
+  },
+  {
+    id: "zombie",
+    name: "Zombie",
+    src: "/coloring-pages/zombie.png",
+  },
+  {
+    id: "rhinomite",
+    name: "Rhinomite",
+    src: "/coloring-pages/rhinomite.png",
   },
 ]
 
