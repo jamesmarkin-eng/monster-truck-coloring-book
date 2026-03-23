@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Image too large" }, { status: 400 });
     }
 
-    const prompt = `Can you turn this picture of a toy monster truck into a black and white image that would be a classic coloring book page for my son?`;`;
+    const prompt = `Can you turn this picture of a toy monster truck into a black and white image that would be a classic coloring book page for my son?`;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`,
