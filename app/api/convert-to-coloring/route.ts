@@ -41,18 +41,23 @@ export async function POST(request: NextRequest) {
             },
             {
               type: 'text',
-              text: `You are a coloring book artist for young children ages 2-5. Look at this monster truck toy image and create a fun SVG coloring page of it.
+              text: `You are a coloring book artist for young children ages 2-5. I'm showing you a photo of a specific monster truck toy. Your job is to faithfully recreate THIS specific truck as a coloring page — not a generic monster truck.
  
-Create a SINGLE SVG element (viewBox="0 0 540 400") with clean, bold black outlines and white fill.
+Study the image carefully:
+- What is the exact body shape and proportions?
+- What logo, graphics, or text is on it?
+- What color patterns exist (recreate as outline regions to color in)?
+- What makes this truck unique and recognizable?
  
-Draw a fun, recognizable monster truck with:
-- Big chunky oversized tires (4 huge wheels with tread detail)
-- Lifted truck body with bold blocky shape
-- Simple cab windows
-- Front grille and headlights
-- Fun details like flames or stars if visible on the truck
-- Dirt/ground beneath the wheels with some action lines
-- A fun title at the top: "MY MONSTER TRUCK" in bold child-friendly text
+Create a SINGLE SVG element (viewBox="0 0 540 400") that a child who owns this exact truck would immediately recognize.
+ 
+Draw the specific truck with:
+- Its actual body shape and proportions
+- Its real name/logo if visible (add as bold outlined text on the truck body)
+- Its graphic designs as outline regions (flames, skulls, patterns — whatever is on it)
+- Big chunky oversized tires with tread detail
+- Ground beneath the wheels with action lines
+- The truck's actual name at the top in bold child-friendly text, or "MY MONSTER TRUCK" if name isn't visible
  
 Strict rules:
 - ALL shapes must have: fill="white" stroke="#111111" stroke-width="3"
