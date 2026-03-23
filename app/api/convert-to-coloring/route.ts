@@ -1,92 +1,122 @@
-import { type NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
- 
-export const maxDuration = 60
- 
+// app/api/generate-coloring-page/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "Gemini API key not configured" },
+      { status: 503 }
+    );
+  }
+
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json(
-        { error: 'Server is not configured. Missing ANTHROPIC_API_KEY.' },
-        { status: 503 },
-      )
+    // Parse incoming FormData — frontend sends the photo as "image"
+    const formData = await request.formData();
+    const imageField = formData.get("image");
+
+    if (!imageField) {
+      return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
- 
-    const { imageData } = await request.json()
- 
-    if (!imageData) {
-      return NextResponse.json({ error: 'Image data is required' }, { status: 400 })
+
+    // Normalize to base64 string + mimeType regardless of how it arrived
+    let base64Image: string;
+    let mimeType: string;
+
+    if (imageField instanceof File) {
+      const arrayBuffer = await imageField.arrayBuffer();
+      base64Image = Buffer.from(arrayBuffer).toString("base64");
+      mimeType = imageField.type || "image/jpeg";
+    } else {
+      // String — could be a raw base64 or a data URI like "data:image/jpeg;base64,..."
+      const str = imageField as string;
+      if (str.startsWith("data:")) {
+        const [header, data] = str.split(",");
+        mimeType = header.split(":")[1].split(";")[0];
+        base64Image = data;
+      } else {
+        base64Image = str;
+        mimeType = "image/jpeg";
+      }
     }
- 
-    const base64Match = imageData.match(/^data:image\/(\w+);base64,(.+)$/)
-    if (!base64Match) {
-      return NextResponse.json({ error: 'Invalid image data format' }, { status: 400 })
+
+    // Enforce a reasonable size limit (~10MB decoded)
+    if (base64Image.length > 13_500_000) {
+      return NextResponse.json({ error: "Image too large" }, { status: 400 });
     }
- 
-    const mediaType = `image/${base64Match[1]}` as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
-    const base64Data = base64Match[2]
- 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
- 
-    const message = await client.messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 4000,
-      messages: [
-        {
-          role: 'user',
-          content: [
+
+    const prompt = `Transform this monster truck toy photo into a high-quality children's coloring book page.
+
+Requirements:
+- Black outlines only on a pure white background — no gray fills, no color, no shading
+- Preserve the unique details of THIS specific truck: body shape, wheel guards, tire tread, bumpers, cab design, any logos or decorations
+- Bold, clean lines suitable for a child to color with crayons (minimum 3px stroke weight)
+- Keep the perspective and composition of the original photo
+- The result should look like a professional coloring book illustration
+- Do not add backgrounds, grass, dirt, or other scenery — just the truck on white`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
             {
-              type: 'image',
-              source: { type: 'base64', media_type: mediaType, data: base64Data },
-            },
-            {
-              type: 'text',
-              text: `You are a coloring book artist for young children ages 2-5. I'm showing you a photo of a specific monster truck toy. Your job is to faithfully recreate THIS specific truck as a coloring page — not a generic monster truck.
- 
-Study the image carefully:
-- What is the exact body shape and proportions?
-- What logo, graphics, or text is on it?
-- What color patterns exist (recreate as outline regions to color in)?
-- What makes this truck unique and recognizable?
- 
-Create a SINGLE SVG element (viewBox="0 0 540 400") that a child who owns this exact truck would immediately recognize.
- 
-Draw the specific truck with:
-- Its actual body shape and proportions
-- Its real name/logo if visible (add as bold outlined text on the truck body)
-- Its graphic designs as outline regions (flames, skulls, patterns — whatever is on it)
-- Big chunky oversized tires with tread detail
-- Ground beneath the wheels with action lines
-- The truck's actual name at the top in bold child-friendly text, or "MY MONSTER TRUCK" if name isn't visible
- 
-Strict rules:
-- ALL shapes must have: fill="white" stroke="#111111" stroke-width="3"
-- White fills only — no color anywhere — this is a coloring book page
-- Bold simple outlines a child can color in
-- Make shapes large and easy to color
-- Output ONLY the raw SVG code starting with <svg and ending with </svg>
-- No markdown, no backticks, no explanation — just the SVG`,
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: mimeType,
+                    data: base64Image,
+                  },
+                },
+                { text: prompt },
+              ],
             },
           ],
-        },
-      ],
-    })
- 
-    const svgText = message.content.find((b) => b.type === 'text')?.text || ''
-    const svgMatch = svgText.match(/<svg[\s\S]*<\/svg>/i)
- 
-    if (!svgMatch) {
-      return NextResponse.json({ error: 'Could not generate coloring page. Try again!' }, { status: 500 })
+          generationConfig: {
+            responseModalities: ["IMAGE", "TEXT"],
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Gemini API error:", response.status, errorText);
+      return NextResponse.json(
+        { error: "Image generation failed", details: errorText },
+        { status: 502 }
+      );
     }
- 
-    // Convert SVG to a data URL so existing frontend code works unchanged
-    const svgBase64 = Buffer.from(svgMatch[0]).toString('base64')
-    const imageUrl = `data:image/svg+xml;base64,${svgBase64}`
- 
-    return NextResponse.json({ imageUrl })
- 
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Failed to convert image'
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+
+    const data = await response.json();
+
+    // Find the image part in the response
+    const parts = data?.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = parts.find(
+      (p: { inlineData?: { mimeType: string; data: string } }) => p.inlineData
+    );
+
+    if (!imagePart?.inlineData?.data) {
+      console.error("No image in Gemini response:", JSON.stringify(data));
+      return NextResponse.json(
+        { error: "No image returned from Gemini" },
+        { status: 502 }
+      );
+    }
+
+    const outputMime = imagePart.inlineData.mimeType || "image/png";
+    const imageUrl = `data:${outputMime};base64,${imagePart.inlineData.data}`;
+
+    return NextResponse.json({ imageUrl });
+  } catch (err) {
+    console.error("Unexpected error in generate-coloring-page:", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
