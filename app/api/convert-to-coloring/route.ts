@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-preview-image-generation",
+      model: "gemini-2.0-flash-exp-image-generation",
     });
 
     const result = await model.generateContent({
