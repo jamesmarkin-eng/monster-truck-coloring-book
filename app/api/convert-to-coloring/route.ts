@@ -1,86 +1,63 @@
-import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-export const maxDuration = 60;
-
-export async function POST(request: NextRequest) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Gemini API key not configured" },
-      { status: 503 }
-    );
-  }
-
+import { NextRequest, NextResponse } from "next/server"
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    const imageData = body.imageData as string;
-
+    const { imageData } = await req.json()
     if (!imageData) {
-      return NextResponse.json({ error: "No image provided" }, { status: 400 });
+      return NextResponse.json({ error: "No image provided" }, { status: 400 })
     }
-
-    // Strip the data URI prefix if present: "data:image/jpeg;base64,..."
-    let base64Image: string;
-    let mimeType = "image/jpeg";
-
-    if (imageData.startsWith("data:")) {
-      const [header, data] = imageData.split(",");
-      mimeType = header.split(":")[1].split(";")[0];
-      base64Image = data;
-    } else {
-      base64Image = imageData;
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      return NextResponse.json({ error: "API key not configured" }, { status: 500 })
     }
-
-    const prompt =
-      "Convert this photo of a toy monster truck into a clean black and white coloring book page for young children (ages 2-5). Use bold, simple outlines. Remove all color and background clutter. The result should look like a page from a kids coloring book — just clean black lines on a white background, ready to print and color in.";
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-exp-image-generation",
-    });
-
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
-            { inlineData: { mimeType, data: base64Image } },
-          ],
-        },
-      ],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      generationConfig: {
-        responseModalities: ["IMAGE", "TEXT"],
-      } as any,
-    });
-
-    const candidates = result.response.candidates;
-    if (!candidates || candidates.length === 0) {
-      return NextResponse.json(
-        { error: "No response from Gemini" },
-        { status: 502 }
-      );
+    // Strip the data URL prefix to get raw base64
+    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "")
+    const mimeTypeMatch = imageData.match(/^data:(image\/\w+);base64,/)
+    const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : "image/jpeg"
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                text: "Convert this photo of a toy monster truck into a clean black and white coloring book page for young children ages 2 to 5. Use bold simple outlines. Remove all color and background clutter. The result should look like a page from a kids coloring book — just clean black lines on a white background, ready to print and color in."
+              },
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: base64Data
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ["IMAGE", "TEXT"]
+          }
+        })
+      }
+    )
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("Gemini API error:", errorText)
+      return NextResponse.json({ error: "Gemini API error" }, { status: 500 })
     }
-
-    for (const part of candidates[0].content.parts) {
-      if (part.inlineData) {
-        const outputMime = part.inlineData.mimeType || "image/png";
-        const imageUrl = `data:${outputMime};base64,${part.inlineData.data}`;
-        return NextResponse.json({ imageUrl });
+    const result = await response.json()
+    // Extract the image from the response
+    const parts = result.candidates?.[0]?.content?.parts ?? []
+    for (const part of parts) {
+      if (part.inline_data) {
+        const { mime_type, data } = part.inline_data
+        return NextResponse.json({
+          imageUrl: `data:${mime_type};base64,${data}`
+        })
       }
     }
-
-    return NextResponse.json(
-      { error: "No image returned from Gemini" },
-      { status: 502 }
-    );
-  } catch (err) {
-    console.error("Unexpected error in convert-to-coloring:", err);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    console.error("No image in Gemini response:", JSON.stringify(result))
+    return NextResponse.json({ error: "No image returned from Gemini" }, { status: 500 })
+  } catch (error) {
+    console.error("Unexpected error in convert-to-coloring:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
