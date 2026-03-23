@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const maxDuration = 60;
 
@@ -12,9 +13,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Frontend sends JSON with a base64 image
     const body = await request.json();
-    const imageData = body.image as string;
+    const imageData = body.imageData as string;
 
     if (!imageData) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
@@ -32,64 +32,52 @@ export async function POST(request: NextRequest) {
       base64Image = imageData;
     }
 
-    const prompt = `Can you turn this picture of a toy monster truck into a black and white image that would be a classic coloring book page for my son?`;
+    const prompt =
+      "Convert this photo of a toy monster truck into a clean black and white coloring book page for young children (ages 2-5). Use bold, simple outlines. Remove all color and background clutter. The result should look like a page from a kids coloring book — just clean black lines on a white background, ready to print and color in.";
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inline_data: {
-                    mime_type: mimeType,
-                    data: base64Image,
-                  },
-                },
-                { text: prompt },
-              ],
-            },
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash-preview-image-generation",
+    });
+
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType, data: base64Image } },
           ],
-          generationConfig: {
-            responseModalities: ["IMAGE", "TEXT"],
-          },
-        }),
+        },
+      ],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      generationConfig: {
+        responseModalities: ["IMAGE", "TEXT"],
+      } as any,
+    });
+
+    const candidates = result.response.candidates;
+    if (!candidates || candidates.length === 0) {
+      return NextResponse.json(
+        { error: "No response from Gemini" },
+        { status: 502 }
+      );
+    }
+
+    for (const part of candidates[0].content.parts) {
+      if (part.inlineData) {
+        const outputMime = part.inlineData.mimeType || "image/png";
+        const imageUrl = `data:${outputMime};base64,${part.inlineData.data}`;
+        return NextResponse.json({ imageUrl });
       }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
-      return NextResponse.json(
-        { error: "Image generation failed", details: errorText },
-        { status: 502 }
-      );
     }
 
-    const data = await response.json();
-
-    const parts = data?.candidates?.[0]?.content?.parts ?? [];
-    const imagePart = parts.find(
-      (p: { inlineData?: { mimeType: string; data: string } }) => p.inlineData
+    return NextResponse.json(
+      { error: "No image returned from Gemini" },
+      { status: 502 }
     );
-
-    if (!imagePart?.inlineData?.data) {
-      console.error("No image in Gemini response:", JSON.stringify(data));
-      return NextResponse.json(
-        { error: "No image returned from Gemini" },
-        { status: 502 }
-      );
-    }
-
-    const outputMime = imagePart.inlineData.mimeType || "image/png";
-    const imageUrl = `data:${outputMime};base64,${imagePart.inlineData.data}`;
-
-    return NextResponse.json({ imageUrl });
   } catch (err) {
-    console.error("Unexpected error in generate-coloring-page:", err);
+    console.error("Unexpected error in convert-to-coloring:", err);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
