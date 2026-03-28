@@ -19,9 +19,8 @@ export function CameraCapture({ onImageCaptured, onClose }: CameraCaptureProps) 
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Limit file size to 10MB to avoid API and memory issues
     if (file.size > 10 * 1024 * 1024) {
-      setError('Photo is too big! Please use a smaller image (under 10MB).')
+      setError("Photo is too big! Please use a smaller image (under 10MB).")
       return
     }
 
@@ -31,7 +30,7 @@ export function CameraCapture({ onImageCaptured, onClose }: CameraCaptureProps) 
       setError(null)
     }
     reader.onerror = () => {
-      setError('Could not read that photo. Please try another one!')
+      setError("Could not read that photo. Please try another one!")
     }
     reader.readAsDataURL(file)
   }, [])
@@ -43,21 +42,21 @@ export function CameraCapture({ onImageCaptured, onClose }: CameraCaptureProps) 
     setError(null)
 
     try {
-      const response = await fetch('/api/convert-to-coloring', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/convert-to-coloring", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageData: capturedImage }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to convert image')
+        throw new Error(data.error || "Failed to convert image")
       }
 
       onImageCaptured(data.imageUrl)
     } catch {
-      setError('Oops! Could not make a coloring page. Try again!')
+      setError("Oops! Could not make a coloring page. Try again!")
     } finally {
       setIsProcessing(false)
     }
@@ -75,110 +74,104 @@ export function CameraCapture({ onImageCaptured, onClose }: CameraCaptureProps) 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between p-4 bg-card shadow-md border-b-4 border-primary/30">
+      <header className="flex items-center justify-between px-5 pt-12 pb-4">
         <button
           onClick={onClose}
           className={cn(
             "flex items-center justify-center",
-            "w-12 h-12 rounded-full",
-            "bg-secondary text-secondary-foreground",
-            "shadow-md active:scale-95 transition-transform",
-            "min-h-[48px] min-w-[48px]"
+            "w-10 h-10 rounded-full",
+            "bg-muted text-foreground",
+            "transition-all active:scale-90",
+            "min-h-[44px] min-w-[44px]"
           )}
           aria-label="Close camera"
         >
-          <X className="w-6 h-6" />
+          <X className="w-5 h-5" />
         </button>
-        
-        <h1 className="text-xl font-bold text-foreground">
-          Take a Picture!
-        </h1>
-        
-        <div className="w-12" /> {/* Spacer for centering */}
+        <h1 className="text-lg font-bold text-foreground">Scan Your Toy</h1>
+        <div className="w-10" />
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center justify-center p-4 gap-6">
+      <main className="flex-1 flex flex-col items-center justify-center px-5 gap-6">
         {isProcessing ? (
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-32 h-32 rounded-full bg-primary/20 flex items-center justify-center">
-              <Loader2 className="w-16 h-16 text-primary animate-spin" />
+          <div className="flex flex-col items-center gap-5">
+            <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center">
+              <Loader2 className="w-12 h-12 text-primary animate-spin" />
             </div>
-            <p className="text-xl font-bold text-foreground text-center">
-              Making your coloring page...
-            </p>
-            <p className="text-muted-foreground text-center">
-              This is so cool!
-            </p>
+            <div className="text-center">
+              <p className="text-xl font-bold text-foreground">Creating your coloring page...</p>
+              <p className="text-sm text-muted-foreground mt-2">AI is working its magic</p>
+            </div>
           </div>
         ) : capturedImage ? (
           <>
             {/* Preview */}
-            <div className="w-full max-w-sm aspect-square bg-card rounded-3xl shadow-2xl border-4 border-primary/20 overflow-hidden">
-              <img 
-                src={capturedImage} 
-                alt="Captured monster truck" 
+            <div className="w-full max-w-sm aspect-square bg-card rounded-2xl shadow-lg border border-border overflow-hidden">
+              <img
+                src={capturedImage}
+                alt="Captured monster truck"
                 className="w-full h-full object-cover"
               />
             </div>
 
             {error && (
-              <p className="text-destructive font-bold text-center px-4">
-                {error}
-              </p>
+              <p className="text-destructive font-semibold text-center text-sm px-4">{error}</p>
             )}
 
             {/* Action buttons */}
-            <div className="flex gap-4">
+            <div className="flex gap-3 w-full max-w-sm">
               <button
                 onClick={handleRetake}
                 className={cn(
-                  "flex items-center justify-center gap-2",
-                  "px-6 py-4 rounded-2xl",
-                  "bg-secondary text-secondary-foreground",
-                  "font-bold text-lg shadow-lg",
-                  "active:scale-95 transition-transform",
+                  "flex-1 flex items-center justify-center gap-2",
+                  "px-5 py-4 rounded-2xl",
+                  "bg-muted text-foreground",
+                  "font-bold shadow-sm",
+                  "active:scale-95 transition-all",
                   "min-h-[56px]"
                 )}
               >
-                <Camera className="w-6 h-6" />
-                Try Again
+                <Camera className="w-5 h-5" />
+                Retake
               </button>
-              
               <button
                 onClick={handleConfirm}
                 className={cn(
-                  "flex items-center justify-center gap-2",
-                  "px-6 py-4 rounded-2xl",
-                  "bg-accent text-accent-foreground",
-                  "font-bold text-lg shadow-lg",
-                  "active:scale-95 transition-transform",
+                  "flex-1 flex items-center justify-center gap-2",
+                  "px-5 py-4 rounded-2xl",
+                  "bg-primary text-primary-foreground",
+                  "font-bold shadow-lg",
+                  "active:scale-95 transition-all",
                   "min-h-[56px]"
                 )}
               >
-                <Check className="w-6 h-6" />
-                Make It!
+                <Check className="w-5 h-5" />
+                Convert
               </button>
             </div>
           </>
         ) : (
           <>
             {/* Camera prompt */}
-            <div 
+            <div
               onClick={openCamera}
               className={cn(
                 "w-full max-w-sm aspect-square",
-                "bg-card rounded-3xl shadow-2xl border-4 border-dashed border-primary/40",
+                "bg-card rounded-2xl shadow-lg border-2 border-dashed border-border",
                 "flex flex-col items-center justify-center gap-4",
-                "cursor-pointer active:scale-98 transition-transform"
+                "cursor-pointer active:scale-[0.98] transition-transform"
               )}
             >
-              <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center">
-                <Camera className="w-12 h-12 text-primary" />
+              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                <Camera className="w-10 h-10 text-primary" />
               </div>
-              <p className="text-xl font-bold text-foreground text-center px-4">
-                Tap to take a photo of your monster truck!
-              </p>
+              <div className="text-center px-8">
+                <p className="text-lg font-bold text-foreground">Take a photo</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Point your camera at a monster truck toy
+                </p>
+              </div>
             </div>
 
             <input
@@ -190,26 +183,25 @@ export function CameraCapture({ onImageCaptured, onClose }: CameraCaptureProps) 
               className="hidden"
             />
 
-            {/* Alternative: choose from gallery */}
             <button
               onClick={() => {
                 if (fileInputRef.current) {
-                  fileInputRef.current.removeAttribute('capture')
+                  fileInputRef.current.removeAttribute("capture")
                   fileInputRef.current.click()
-                  fileInputRef.current.setAttribute('capture', 'environment')
+                  fileInputRef.current.setAttribute("capture", "environment")
                 }
               }}
               className={cn(
                 "flex items-center justify-center gap-2",
                 "px-6 py-4 rounded-2xl",
-                "bg-secondary text-secondary-foreground",
-                "font-bold text-lg shadow-lg",
-                "active:scale-95 transition-transform",
+                "bg-muted text-foreground",
+                "font-bold shadow-sm",
+                "active:scale-95 transition-all",
                 "min-h-[56px]"
               )}
             >
-              <ImageIcon className="w-6 h-6" />
-              Pick from Photos
+              <ImageIcon className="w-5 h-5" />
+              Choose from Photos
             </button>
           </>
         )}

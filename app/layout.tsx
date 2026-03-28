@@ -17,7 +17,7 @@ const comicNeue = Comic_Neue({
 
 export const metadata: Metadata = {
   title: 'Monster Truck Coloring Book',
-  description: 'A fun digital coloring book for kids featuring awesome Monster Trucks!',
+  description: 'The ultimate monster truck coloring book for kids! Color epic trucks, scan your own toys with AI, and create amazing artwork.',
   generator: 'v0.app',
   manifest: '/manifest.json',
   icons: {
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'Color Trucks',
   },
 }
@@ -35,7 +35,8 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  themeColor: '#87CEEB',
+  userScalable: false,
+  themeColor: '#f5f1eb',
 }
 
 export default function RootLayout({

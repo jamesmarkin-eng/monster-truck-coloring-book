@@ -1,21 +1,80 @@
 "use client"
 
+import { useState } from "react"
 import { cn } from "@/lib/utils"
+import { ChevronDown, ChevronUp } from "lucide-react"
 
-// Kid-friendly color palette with big, easy-to-tap swatches
-export const colorPalette = [
+// Organized color groups for a professional palette
+const colorGroups = [
+  {
+    name: "Reds",
+    colors: [
+      { name: "Cherry", hex: "#DC2626" },
+      { name: "Red", hex: "#EF4444" },
+      { name: "Rose", hex: "#F87171" },
+      { name: "Coral", hex: "#FB7185" },
+    ],
+  },
+  {
+    name: "Oranges",
+    colors: [
+      { name: "Rust", hex: "#C2410C" },
+      { name: "Orange", hex: "#F97316" },
+      { name: "Amber", hex: "#F59E0B" },
+      { name: "Peach", hex: "#FDBA74" },
+    ],
+  },
+  {
+    name: "Yellows",
+    colors: [
+      { name: "Gold", hex: "#CA8A04" },
+      { name: "Yellow", hex: "#EAB308" },
+      { name: "Lemon", hex: "#FDE047" },
+      { name: "Cream", hex: "#FEF9C3" },
+    ],
+  },
+  {
+    name: "Greens",
+    colors: [
+      { name: "Forest", hex: "#15803D" },
+      { name: "Green", hex: "#22C55E" },
+      { name: "Lime", hex: "#84CC16" },
+      { name: "Mint", hex: "#86EFAC" },
+    ],
+  },
+  {
+    name: "Blues",
+    colors: [
+      { name: "Navy", hex: "#1E40AF" },
+      { name: "Blue", hex: "#3B82F6" },
+      { name: "Sky", hex: "#38BDF8" },
+      { name: "Ice", hex: "#BAE6FD" },
+    ],
+  },
+  {
+    name: "Others",
+    colors: [
+      { name: "Pink", hex: "#EC4899" },
+      { name: "Brown", hex: "#92400E" },
+      { name: "Gray", hex: "#6B7280" },
+      { name: "Black", hex: "#1F2937" },
+      { name: "White", hex: "#FFFFFF" },
+    ],
+  },
+]
+
+// Quick palette: the most used colors shown by default
+const quickColors = [
   { name: "Red", hex: "#EF4444" },
   { name: "Orange", hex: "#F97316" },
   { name: "Yellow", hex: "#EAB308" },
   { name: "Green", hex: "#22C55E" },
   { name: "Blue", hex: "#3B82F6" },
-  { name: "Purple", hex: "#A855F7" },
+  { name: "Sky", hex: "#38BDF8" },
   { name: "Pink", hex: "#EC4899" },
-  { name: "Black", hex: "#1F2937" },
-  { name: "Gray", hex: "#6B7280" },
   { name: "Brown", hex: "#92400E" },
+  { name: "Black", hex: "#1F2937" },
   { name: "White", hex: "#FFFFFF" },
-  { name: "Sky", hex: "#7DD3FC" },
 ]
 
 interface ColorPaletteProps {
@@ -24,28 +83,73 @@ interface ColorPaletteProps {
 }
 
 export function ColorPalette({ selectedColor, onColorSelect }: ColorPaletteProps) {
+  const [expanded, setExpanded] = useState(false)
+
   return (
-    <div className="grid grid-cols-6 gap-2 p-3 bg-card rounded-2xl shadow-lg border-4 border-primary/20">
-      {colorPalette.map((color) => (
+    <div className="flex flex-col gap-2">
+      {/* Quick palette row */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        {quickColors.map((color) => (
+          <button
+            key={color.hex}
+            onClick={() => onColorSelect(color.hex)}
+            className={cn(
+              "w-10 h-10 rounded-full flex-shrink-0 transition-all duration-150",
+              "border-2 active:scale-90",
+              "min-h-[44px] min-w-[44px]",
+              selectedColor === color.hex
+                ? "border-foreground scale-110 shadow-lg ring-2 ring-primary/30"
+                : "border-card shadow-sm"
+            )}
+            style={{ backgroundColor: color.hex }}
+            aria-label={`Select ${color.name} color`}
+          />
+        ))}
+        {/* Expand toggle */}
         <button
-          key={color.hex}
-          onClick={() => onColorSelect(color.hex)}
+          onClick={() => setExpanded(!expanded)}
           className={cn(
-            "w-12 h-12 md:w-14 md:h-14 rounded-xl border-4 transition-all duration-200 active:scale-95",
-            "shadow-md hover:shadow-lg hover:scale-105",
-            "min-h-[48px] min-w-[48px]", // Ensure 44px+ touch target
-            selectedColor === color.hex 
-              ? "border-foreground ring-4 ring-primary scale-110" 
-              : "border-white/50"
+            "w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center",
+            "bg-muted text-muted-foreground border-2 border-border",
+            "min-h-[44px] min-w-[44px]",
+            "transition-all active:scale-90"
           )}
-          style={{ backgroundColor: color.hex }}
-          aria-label={`Select ${color.name} color`}
+          aria-label={expanded ? "Show fewer colors" : "Show more colors"}
         >
-          {selectedColor === color.hex && (
-            <span className="sr-only">Selected</span>
-          )}
+          {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
         </button>
-      ))}
+      </div>
+
+      {/* Expanded palette */}
+      {expanded && (
+        <div className="flex flex-col gap-3 bg-card rounded-2xl p-3 border border-border shadow-inner animate-in slide-in-from-bottom-2 duration-200">
+          {colorGroups.map((group) => (
+            <div key={group.name}>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+                {group.name}
+              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {group.colors.map((color) => (
+                  <button
+                    key={color.hex}
+                    onClick={() => onColorSelect(color.hex)}
+                    className={cn(
+                      "w-9 h-9 rounded-lg transition-all duration-150",
+                      "border active:scale-90",
+                      "min-h-[44px] min-w-[44px]",
+                      selectedColor === color.hex
+                        ? "border-foreground scale-105 shadow-md ring-2 ring-primary/30"
+                        : "border-border/50 shadow-sm"
+                    )}
+                    style={{ backgroundColor: color.hex }}
+                    aria-label={`Select ${color.name}`}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
