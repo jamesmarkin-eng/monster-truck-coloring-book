@@ -13,6 +13,9 @@ import {
   Paintbrush,
   Undo2,
   Redo2,
+  Maximize,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -23,9 +26,15 @@ interface CustomColoringPageProps {
 }
 
 type Tool = "brush" | "eraser"
+type GestureMode = "none" | "draw" | "pan-zoom"
+
+const MIN_ZOOM = 1
+const MAX_ZOOM = 5
+const ZOOM_STEP = 0.5
 
 export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: CustomColoringPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [selectedColor, setSelectedColor] = useState("#EF4444")
   const [isDrawing, setIsDrawing] = useState(false)
   const [brushSize, setBrushSize] = useState(12)
@@ -35,6 +44,18 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
   const imageRef = useRef<HTMLImageElement | null>(null)
   const canvasSizeRef = useRef({ width: 0, height: 0 })
 
+  // Zoom & pan state
+  const [zoom, setZoom] = useState(1)
+  const [panX, setPanX] = useState(0)
+  const [panY, setPanY] = useState(0)
+  const gestureModeRef = useRef<GestureMode>("none")
+  const lastPinchDistRef = useRef(0)
+  const lastPinchCenterRef = useRef({ x: 0, y: 0 })
+  const panStartRef = useRef({ x: 0, y: 0 })
+  const panOffsetRef = useRef({ x: 0, y: 0 })
+  const zoomRef = useRef(1)
+  const drawTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Undo/Redo history
   const historyRef = useRef<ImageData[]>([])
   const historyIndexRef = useRef(-1)
@@ -43,18 +64,35 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
 
   const brushSizes = [4, 8, 12, 20, 32]
 
+  // Keep zoom ref in sync
+  useEffect(() => {
+    zoomRef.current = zoom
+  }, [zoom])
+
+  const clampPan = useCallback((px: number, py: number, z: number) => {
+    const container = containerRef.current
+    if (!container) return { x: px, y: py }
+    const { width, height } = canvasSizeRef.current
+    const containerRect = container.getBoundingClientRect()
+    const scaledW = width * z
+    const scaledH = height * z
+    const maxPanX = Math.max(0, (scaledW - containerRect.width) / 2)
+    const maxPanY = Math.max(0, (scaledH - containerRect.height) / 2)
+    return {
+      x: Math.max(-maxPanX, Math.min(maxPanX, px)),
+      y: Math.max(-maxPanY, Math.min(maxPanY, py)),
+    }
+  }, [])
+
   const saveToHistory = useCallback(() => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext("2d")
     if (!ctx || !canvas) return
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-
-    // Trim any redo states beyond current index
     historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1)
     historyRef.current.push(imageData)
 
-    // Limit history to 30 entries
     if (historyRef.current.length > 30) {
       historyRef.current.shift()
     } else {
@@ -129,7 +167,6 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
 
       setImageLoaded(true)
 
-      // Save initial state to history
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       historyRef.current = [imageData]
       historyIndexRef.current = 0
@@ -148,8 +185,9 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
     }
   }, [imageUrl])
 
+  // Convert screen coords to canvas coords accounting for zoom + pan
   const getCanvasCoordinates = useCallback(
-    (e: React.TouchEvent | React.MouseEvent) => {
+    (clientX: number, clientY: number) => {
       const canvas = canvasRef.current
       if (!canvas) return null
 
@@ -158,17 +196,9 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
       const scaleX = width / rect.width
       const scaleY = height / rect.height
 
-      if ("touches" in e) {
-        const touch = e.touches[0]
-        return {
-          x: (touch.clientX - rect.left) * scaleX,
-          y: (touch.clientY - rect.top) * scaleY,
-        }
-      } else {
-        return {
-          x: (e.clientX - rect.left) * scaleX,
-          y: (e.clientY - rect.top) * scaleY,
-        }
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY,
       }
     },
     []
@@ -180,14 +210,16 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
       const ctx = canvas?.getContext("2d")
       if (!ctx) return
 
+      // Scale brush size inversely with zoom so it feels consistent
+      const scaledBrush = brushSize / zoomRef.current
+
       if (activeTool === "eraser") {
-        // Eraser: redraw the original image in that area
         const img = imageRef.current
         if (!img) return
         const { width, height } = canvasSizeRef.current
         ctx.save()
         ctx.beginPath()
-        ctx.arc(x, y, brushSize, 0, Math.PI * 2)
+        ctx.arc(x, y, scaledBrush, 0, Math.PI * 2)
         ctx.clip()
         ctx.drawImage(img, 0, 0, width, height)
         ctx.restore()
@@ -195,7 +227,7 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
         ctx.globalCompositeOperation = "multiply"
         ctx.fillStyle = selectedColor
         ctx.beginPath()
-        ctx.arc(x, y, brushSize, 0, Math.PI * 2)
+        ctx.arc(x, y, scaledBrush, 0, Math.PI * 2)
         ctx.fill()
         ctx.globalCompositeOperation = "source-over"
       }
@@ -203,11 +235,146 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
     [selectedColor, brushSize, activeTool]
   )
 
-  const handleStart = useCallback(
-    (e: React.TouchEvent | React.MouseEvent) => {
+  // --- Touch gesture handlers ---
+  const getTouchDistance = (t1: Touch, t2: Touch) => {
+    const dx = t1.clientX - t2.clientX
+    const dy = t1.clientY - t2.clientY
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+
+  const getTouchCenter = (t1: Touch, t2: Touch) => ({
+    x: (t1.clientX + t2.clientX) / 2,
+    y: (t1.clientY + t2.clientY) / 2,
+  })
+
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
       e.preventDefault()
+
+      if (e.touches.length >= 2) {
+        // Multi-touch: switch to pan-zoom, cancel any pending draw
+        gestureModeRef.current = "pan-zoom"
+        setIsDrawing(false)
+        if (drawTimerRef.current) {
+          clearTimeout(drawTimerRef.current)
+          drawTimerRef.current = null
+        }
+
+        const t1 = e.touches[0]
+        const t2 = e.touches[1]
+        lastPinchDistRef.current = getTouchDistance(t1, t2)
+        lastPinchCenterRef.current = getTouchCenter(t1, t2)
+        panStartRef.current = { x: panX, y: panY }
+        panOffsetRef.current = { x: 0, y: 0 }
+        return
+      }
+
+      // Single touch: start drawing after a tiny delay
+      // to allow a second finger to arrive for pinch
+      gestureModeRef.current = "draw"
+      const touch = e.touches[0]
+      const cx = touch.clientX
+      const cy = touch.clientY
+
+      drawTimerRef.current = setTimeout(() => {
+        if (gestureModeRef.current !== "draw") return
+        const coords = getCanvasCoordinates(cx, cy)
+        if (coords) {
+          setIsDrawing(true)
+          draw(coords.x, coords.y)
+        }
+      }, 60)
+    },
+    [panX, panY, getCanvasCoordinates, draw]
+  )
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      e.preventDefault()
+
+      if (e.touches.length >= 2 && gestureModeRef.current === "pan-zoom") {
+        const t1 = e.touches[0]
+        const t2 = e.touches[1]
+
+        // Pinch zoom
+        const newDist = getTouchDistance(t1, t2)
+        const scale = newDist / lastPinchDistRef.current
+        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomRef.current * scale))
+        lastPinchDistRef.current = newDist
+
+        // Pan
+        const center = getTouchCenter(t1, t2)
+        const dx = center.x - lastPinchCenterRef.current.x
+        const dy = center.y - lastPinchCenterRef.current.y
+        lastPinchCenterRef.current = center
+
+        const newPanX = panX + dx
+        const newPanY = panY + dy
+        const clamped = clampPan(newPanX, newPanY, newZoom)
+
+        setZoom(newZoom)
+        zoomRef.current = newZoom
+        setPanX(clamped.x)
+        setPanY(clamped.y)
+        return
+      }
+
+      // Single finger drawing
+      if (gestureModeRef.current === "draw") {
+        // If timer hasn't fired yet, start drawing now
+        if (drawTimerRef.current) {
+          clearTimeout(drawTimerRef.current)
+          drawTimerRef.current = null
+          setIsDrawing(true)
+        }
+
+        const touch = e.touches[0]
+        const coords = getCanvasCoordinates(touch.clientX, touch.clientY)
+        if (coords) {
+          draw(coords.x, coords.y)
+        }
+      }
+    },
+    [panX, panY, getCanvasCoordinates, draw, clampPan]
+  )
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 0) {
+        if (drawTimerRef.current) {
+          clearTimeout(drawTimerRef.current)
+          drawTimerRef.current = null
+        }
+
+        if (gestureModeRef.current === "draw" && isDrawing) {
+          setIsDrawing(false)
+          saveToHistory()
+        }
+
+        // After pinch-zoom, clamp the pan
+        if (gestureModeRef.current === "pan-zoom") {
+          const clamped = clampPan(panX, panY, zoom)
+          setPanX(clamped.x)
+          setPanY(clamped.y)
+        }
+
+        gestureModeRef.current = "none"
+      } else if (e.touches.length === 1 && gestureModeRef.current === "pan-zoom") {
+        // One finger lifted from pinch, keep panning with remaining finger
+        const t = e.touches[0]
+        lastPinchCenterRef.current = { x: t.clientX, y: t.clientY }
+      }
+    },
+    [isDrawing, saveToHistory, panX, panY, zoom, clampPan]
+  )
+
+  // --- Mouse handlers (for desktop) ---
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      gestureModeRef.current = "draw"
       setIsDrawing(true)
-      const coords = getCanvasCoordinates(e)
+      const coords = getCanvasCoordinates(e.clientX, e.clientY)
       if (coords) {
         draw(coords.x, coords.y)
       }
@@ -215,11 +382,11 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
     [getCanvasCoordinates, draw]
   )
 
-  const handleMove = useCallback(
-    (e: React.TouchEvent | React.MouseEvent) => {
-      if (!isDrawing) return
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isDrawing || gestureModeRef.current !== "draw") return
       e.preventDefault()
-      const coords = getCanvasCoordinates(e)
+      const coords = getCanvasCoordinates(e.clientX, e.clientY)
       if (coords) {
         draw(coords.x, coords.y)
       }
@@ -227,12 +394,54 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
     [isDrawing, getCanvasCoordinates, draw]
   )
 
-  const handleEnd = useCallback(() => {
+  const handleMouseEnd = useCallback(() => {
     if (isDrawing) {
       setIsDrawing(false)
       saveToHistory()
     }
+    gestureModeRef.current = "none"
   }, [isDrawing, saveToHistory])
+
+  // Desktop scroll-to-zoom
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -0.2 : 0.2
+      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom + delta))
+      const clamped = clampPan(panX, panY, newZoom)
+      setZoom(newZoom)
+      zoomRef.current = newZoom
+      setPanX(clamped.x)
+      setPanY(clamped.y)
+    },
+    [zoom, panX, panY, clampPan]
+  )
+
+  // Zoom controls
+  const handleZoomIn = useCallback(() => {
+    const newZoom = Math.min(MAX_ZOOM, zoom + ZOOM_STEP)
+    const clamped = clampPan(panX, panY, newZoom)
+    setZoom(newZoom)
+    zoomRef.current = newZoom
+    setPanX(clamped.x)
+    setPanY(clamped.y)
+  }, [zoom, panX, panY, clampPan])
+
+  const handleZoomOut = useCallback(() => {
+    const newZoom = Math.max(MIN_ZOOM, zoom - ZOOM_STEP)
+    const clamped = clampPan(panX, panY, newZoom)
+    setZoom(newZoom)
+    zoomRef.current = newZoom
+    setPanX(clamped.x)
+    setPanY(clamped.y)
+  }, [zoom, panX, panY, clampPan])
+
+  const handleFitToScreen = useCallback(() => {
+    setZoom(1)
+    zoomRef.current = 1
+    setPanX(0)
+    setPanY(0)
+  }, [])
 
   const handleReset = useCallback(() => {
     const canvas = canvasRef.current
@@ -244,7 +453,8 @@ export function CustomColoringPage({ imageUrl, pageName = "My Truck", onBack }: 
     ctx.clearRect(0, 0, width, height)
     ctx.drawImage(img, 0, 0, width, height)
     saveToHistory()
-  }, [saveToHistory])
+    handleFitToScreen()
+  }, [saveToHistory, handleFitToScreen])
 
   const handleSave = useCallback(() => {
     const canvas = canvasRef.current
@@ -295,6 +505,8 @@ img { max-width: 100%; max-height: 100vh; object-fit: contain; }
     const idx = brushSizes.indexOf(brushSize)
     if (idx < brushSizes.length - 1) setBrushSize(brushSizes[idx + 1])
   }
+
+  const isZoomed = zoom > 1.05
 
   return (
     <div className="flex flex-col h-full min-h-screen bg-background">
@@ -355,29 +567,98 @@ img { max-width: 100%; max-height: 100vh; object-fit: contain; }
           </div>
         )}
 
-        {/* Canvas container */}
-        <div className="w-full max-w-2xl bg-card rounded-2xl shadow-lg overflow-hidden border border-border">
+        {/* Zoom indicator pill - shows when zoomed */}
+        {isZoomed && (
+          <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 px-3 py-1.5 bg-tool-surface/90 text-tool-surface-foreground rounded-full text-xs font-bold backdrop-blur-sm">
+            <ZoomIn className="w-3 h-3" />
+            {Math.round(zoom * 100)}%
+          </div>
+        )}
+
+        {/* Zoom controls - floating on the right */}
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1.5">
+          <button
+            onClick={handleZoomIn}
+            disabled={zoom >= MAX_ZOOM}
+            className={cn(
+              "flex items-center justify-center",
+              "w-10 h-10 rounded-xl",
+              "bg-card shadow-lg border border-border",
+              "transition-all duration-200 active:scale-90",
+              "min-h-[44px] min-w-[44px]",
+              zoom >= MAX_ZOOM ? "opacity-30" : "text-foreground"
+            )}
+            aria-label="Zoom in"
+          >
+            <ZoomIn className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleZoomOut}
+            disabled={zoom <= MIN_ZOOM}
+            className={cn(
+              "flex items-center justify-center",
+              "w-10 h-10 rounded-xl",
+              "bg-card shadow-lg border border-border",
+              "transition-all duration-200 active:scale-90",
+              "min-h-[44px] min-w-[44px]",
+              zoom <= MIN_ZOOM ? "opacity-30" : "text-foreground"
+            )}
+            aria-label="Zoom out"
+          >
+            <ZoomOut className="w-5 h-5" />
+          </button>
+          {isZoomed && (
+            <button
+              onClick={handleFitToScreen}
+              className={cn(
+                "flex items-center justify-center",
+                "w-10 h-10 rounded-xl",
+                "bg-primary text-primary-foreground shadow-lg",
+                "transition-all duration-200 active:scale-90",
+                "min-h-[44px] min-w-[44px]"
+              )}
+              aria-label="Fit to screen"
+            >
+              <Maximize className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {/* Canvas container with zoom & pan transform */}
+        <div
+          ref={containerRef}
+          className="w-full max-w-2xl bg-card rounded-2xl shadow-lg overflow-hidden border border-border"
+        >
           {!imageLoaded && (
             <div className="aspect-[3/4] flex items-center justify-center">
               <div className="w-12 h-12 border-3 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
           )}
-          <canvas
-            ref={canvasRef}
-            onTouchStart={handleStart}
-            onTouchMove={handleMove}
-            onTouchEnd={handleEnd}
-            onMouseDown={handleStart}
-            onMouseMove={handleMove}
-            onMouseUp={handleEnd}
-            onMouseLeave={handleEnd}
-            className={cn(
-              "w-full h-auto touch-none",
-              !imageLoaded && "hidden",
-              activeTool === "eraser" && "cursor-cell"
-            )}
-            style={{ touchAction: "none" }}
-          />
+          <div
+            style={{
+              transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+              transformOrigin: "center center",
+              transition: gestureModeRef.current === "pan-zoom" ? "none" : "transform 0.2s ease-out",
+            }}
+          >
+            <canvas
+              ref={canvasRef}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseEnd}
+              onMouseLeave={handleMouseEnd}
+              onWheel={handleWheel}
+              className={cn(
+                "w-full h-auto touch-none",
+                !imageLoaded && "hidden",
+                activeTool === "eraser" && "cursor-cell"
+              )}
+              style={{ touchAction: "none" }}
+            />
+          </div>
         </div>
       </main>
 
